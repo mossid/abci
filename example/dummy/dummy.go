@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/tendermint/abci/example/code"
 	"github.com/tendermint/abci/types"
 	wire "github.com/tendermint/go-wire"
 	"github.com/tendermint/iavl"
@@ -43,11 +42,11 @@ func (app *DummyApplication) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		{Key: "app.creator", ValueType: types.KVPair_STRING, ValueString: "jae"},
 		{Key: "app.key", ValueType: types.KVPair_STRING, ValueString: string(key)},
 	}
-	return types.ResponseDeliverTx{Code: code.CodeTypeOK, Tags: tags}
+	return types.ResponseDeliverTx{Code: types.CodeType_OK, Tags: tags}
 }
 
 func (app *DummyApplication) CheckTx(tx []byte) types.ResponseCheckTx {
-	return types.ResponseCheckTx{Code: code.CodeTypeOK}
+	return types.ResponseCheckTx{Code: types.CodeType_OK}
 }
 
 func (app *DummyApplication) Commit() types.ResponseCommit {
@@ -65,7 +64,7 @@ func (app *DummyApplication) Commit() types.ResponseCommit {
 		}
 	}
 
-	return types.ResponseCommit{Code: code.CodeTypeOK, Data: hash}
+	return types.ResponseCommit{Code: types.CodeType_OK, Data: hash}
 }
 
 func (app *DummyApplication) Query(reqQuery types.RequestQuery) (resQuery types.ResponseQuery) {

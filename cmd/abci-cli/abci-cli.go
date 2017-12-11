@@ -10,47 +10,59 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spf13/cobra"
-
-	cmn "github.com/tendermint/tmlibs/common"
-	"github.com/tendermint/tmlibs/log"
-
 	abcicli "github.com/tendermint/abci/client"
-	"github.com/tendermint/abci/example/code"
 	"github.com/tendermint/abci/example/counter"
 	"github.com/tendermint/abci/example/dummy"
 	"github.com/tendermint/abci/server"
-	servertest "github.com/tendermint/abci/tests/server"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
+	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
+
+	"github.com/spf13/cobra"
 )
 
+// Structure for data passed to print response.
+type response struct {
+	// generic abci response
+	Data []byte
+	Code types.CodeType
+	Log  string
+
+	Query *queryResponse
+}
+
+type queryResponse struct {
+	Key    []byte
+	Value  []byte
+	Height uint64
+	Proof  []byte
+}
+
 // client is a global variable so it can be reused by the console
-var (
-	client abcicli.Client
-	logger log.Logger
-)
+var client abcicli.Client
+
+var logger log.Logger
 
 // flags
 var (
 	// global
-	flagAddress  string
-	flagAbci     string
-	flagVerbose  bool   // for the println output
-	flagLogLevel string // for the logger
+	address string
+	abci    string
+	verbose bool
 
 	// query
-	flagPath   string
-	flagHeight int
-	flagProve  bool
+	path   string
+	height int
+	prove  bool
 
 	// counter
-	flagAddrC  string
-	flagSerial bool
+	addrC  string
+	serial bool
 
 	// dummy
-	flagAddrD   string
-	flagPersist string
+	addrD   string
+	persist string
 )
 
 var RootCmd = &cobra.Command{
@@ -67,42 +79,21 @@ var RootCmd = &cobra.Command{
 		}
 
 		if logger == nil {
-			allowLevel, err := log.AllowLevel(flagLogLevel)
-			if err != nil {
-				return err
-			}
-			logger = log.NewFilter(log.NewTMLogger(log.NewSyncWriter(os.Stdout)), allowLevel)
+			logger = log.NewFilter(log.NewTMLogger(log.NewSyncWriter(os.Stdout)), log.AllowError())
 		}
 		if client == nil {
 			var err error
-			client, err = abcicli.NewClient(flagAddress, flagAbci, false)
+			client, err = abcicli.NewClient(address, abci, false)
 			if err != nil {
 				return err
 			}
 			client.SetLogger(logger.With("module", "abci-client"))
-			if err := client.Start(); err != nil {
+			if _, err := client.Start(); err != nil {
 				return err
 			}
 		}
 		return nil
 	},
-}
-
-// Structure for data passed to print response.
-type response struct {
-	// generic abci response
-	Data []byte
-	Code uint32
-	Log  string
-
-	Query *queryResponse
-}
-
-type queryResponse struct {
-	Key    []byte
-	Value  []byte
-	Height int64
-	Proof  []byte
 }
 
 func Execute() error {
@@ -112,26 +103,25 @@ func Execute() error {
 }
 
 func addGlobalFlags() {
-	RootCmd.PersistentFlags().StringVarP(&flagAddress, "address", "", "tcp://0.0.0.0:46658", "Address of application socket")
-	RootCmd.PersistentFlags().StringVarP(&flagAbci, "abci", "", "socket", "Either socket or grpc")
-	RootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print the command and results as if it were a console session")
-	RootCmd.PersistentFlags().StringVarP(&flagLogLevel, "log_level", "", "debug", "Set the logger level")
+	RootCmd.PersistentFlags().StringVarP(&address, "address", "", "tcp://127.0.0.1:46658", "Address of application socket")
+	RootCmd.PersistentFlags().StringVarP(&abci, "abci", "", "socket", "Either socket or grpc")
+	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Print the command and results as if it were a console session")
 }
 
 func addQueryFlags() {
-	queryCmd.PersistentFlags().StringVarP(&flagPath, "path", "", "/store", "Path to prefix query with")
-	queryCmd.PersistentFlags().IntVarP(&flagHeight, "height", "", 0, "Height to query the blockchain at")
-	queryCmd.PersistentFlags().BoolVarP(&flagProve, "prove", "", false, "Whether or not to return a merkle proof of the query result")
+	queryCmd.PersistentFlags().StringVarP(&path, "path", "", "/store", "Path to prefix query with")
+	queryCmd.PersistentFlags().IntVarP(&height, "height", "", 0, "Height to query the blockchain at")
+	queryCmd.PersistentFlags().BoolVarP(&prove, "prove", "", false, "Whether or not to return a merkle proof of the query result")
 }
 
 func addCounterFlags() {
-	counterCmd.PersistentFlags().StringVarP(&flagAddrC, "addr", "", "tcp://0.0.0.0:46658", "Listen address")
-	counterCmd.PersistentFlags().BoolVarP(&flagSerial, "serial", "", false, "Enforce incrementing (serial) transactions")
+	counterCmd.PersistentFlags().StringVarP(&addrC, "addr", "", "tcp://0.0.0.0:46658", "Listen address")
+	counterCmd.PersistentFlags().BoolVarP(&serial, "serial", "", false, "Enforce incrementing (serial) transactions")
 }
 
 func addDummyFlags() {
-	dummyCmd.PersistentFlags().StringVarP(&flagAddrD, "addr", "", "tcp://0.0.0.0:46658", "Listen address")
-	dummyCmd.PersistentFlags().StringVarP(&flagPersist, "persist", "", "", "Directory to use for a database")
+	dummyCmd.PersistentFlags().StringVarP(&addrD, "addr", "", "tcp://0.0.0.0:46658", "Listen address")
+	dummyCmd.PersistentFlags().StringVarP(&persist, "persist", "", "", "Directory to use for a database")
 }
 func addCommands() {
 	RootCmd.AddCommand(batchCmd)
@@ -143,7 +133,6 @@ func addCommands() {
 	RootCmd.AddCommand(checkTxCmd)
 	RootCmd.AddCommand(commitCmd)
 	RootCmd.AddCommand(versionCmd)
-	RootCmd.AddCommand(testCmd)
 	addQueryFlags()
 	RootCmd.AddCommand(queryCmd)
 
@@ -274,16 +263,6 @@ var dummyCmd = &cobra.Command{
 	},
 }
 
-var testCmd = &cobra.Command{
-	Use:   "test",
-	Short: "Run integration tests",
-	Long:  "",
-	Args:  cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmdTest(cmd, args)
-	},
-}
-
 // Generates new Args array based off of previous call args to maintain flag persistence
 func persistentArgs(line []byte) []string {
 
@@ -299,51 +278,6 @@ func persistentArgs(line []byte) []string {
 }
 
 //--------------------------------------------------------------------------------
-
-func or(err1 error, err2 error) error {
-	if err1 == nil {
-		return err2
-	} else {
-		return err1
-	}
-}
-
-func cmdTest(cmd *cobra.Command, args []string) error {
-	fmt.Println("Running tests")
-
-	err := servertest.InitChain(client)
-	fmt.Println("")
-	err = or(err, servertest.SetOption(client, "serial", "on"))
-	fmt.Println("")
-	err = or(err, servertest.Commit(client, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte("abc"), code.CodeTypeBadNonce, nil))
-	fmt.Println("")
-	err = or(err, servertest.Commit(client, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00}, code.CodeTypeOK, nil))
-	fmt.Println("")
-	err = or(err, servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1}))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00}, code.CodeTypeBadNonce, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x01}, code.CodeTypeOK, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00, 0x02}, code.CodeTypeOK, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00, 0x03}, code.CodeTypeOK, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00, 0x00, 0x04}, code.CodeTypeOK, nil))
-	fmt.Println("")
-	err = or(err, servertest.DeliverTx(client, []byte{0x00, 0x00, 0x06}, code.CodeTypeBadNonce, nil))
-	fmt.Println("")
-	err = or(err, servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5}))
-
-	if err != nil {
-		return errors.New("Some checks didn't pass, please inspect stdout to see the exact failures.")
-	}
-	return nil
-}
 
 func cmdBatch(cmd *cobra.Command, args []string) error {
 	bufReader := bufio.NewReader(os.Stdin)
@@ -427,8 +361,7 @@ func cmdSetOption(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	printResponse(cmd, args, response{
-		Code: res.Code,
-		Log:  res.Log,
+		Log: res.Log,
 	})
 	return nil
 }
@@ -492,9 +425,9 @@ func cmdQuery(cmd *cobra.Command, args []string) error {
 
 	resQuery, err := client.QuerySync(types.RequestQuery{
 		Data:   queryBytes,
-		Path:   flagPath,
-		Height: int64(flagHeight),
-		Prove:  flagProve,
+		Path:   path,
+		Height: uint64(height),
+		Prove:  prove,
 	})
 	if err != nil {
 		return err
@@ -514,17 +447,17 @@ func cmdQuery(cmd *cobra.Command, args []string) error {
 
 func cmdCounter(cmd *cobra.Command, args []string) error {
 
-	app := counter.NewCounterApplication(flagSerial)
+	app := counter.NewCounterApplication(serial)
 
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// Start the listener
-	srv, err := server.NewServer(flagAddrC, flagAbci, app)
+	srv, err := server.NewServer(addrC, abci, app)
 	if err != nil {
 		return err
 	}
 	srv.SetLogger(logger.With("module", "abci-server"))
-	if err := srv.Start(); err != nil {
+	if _, err := srv.Start(); err != nil {
 		return err
 	}
 
@@ -541,20 +474,20 @@ func cmdDummy(cmd *cobra.Command, args []string) error {
 
 	// Create the application - in memory or persisted to disk
 	var app types.Application
-	if flagPersist == "" {
+	if persist == "" {
 		app = dummy.NewDummyApplication()
 	} else {
-		app = dummy.NewPersistentDummyApplication(flagPersist)
+		app = dummy.NewPersistentDummyApplication(persist)
 		app.(*dummy.PersistentDummyApplication).SetLogger(logger.With("module", "dummy"))
 	}
 
 	// Start the listener
-	srv, err := server.NewServer(flagAddrD, flagAbci, app)
+	srv, err := server.NewServer(addrD, abci, app)
 	if err != nil {
 		return err
 	}
 	srv.SetLogger(logger.With("module", "abci-server"))
-	if err := srv.Start(); err != nil {
+	if _, err := srv.Start(); err != nil {
 		return err
 	}
 
@@ -570,17 +503,12 @@ func cmdDummy(cmd *cobra.Command, args []string) error {
 
 func printResponse(cmd *cobra.Command, args []string, rsp response) {
 
-	if flagVerbose {
+	if verbose {
 		fmt.Println(">", cmd.Use, strings.Join(args, " "))
 	}
 
 	// Always print the status code.
-	if rsp.Code == types.CodeTypeOK {
-		fmt.Printf("-> code: OK\n")
-	} else {
-		fmt.Printf("-> code: %d\n", rsp.Code)
-
-	}
+	fmt.Printf("-> code: %s\n", rsp.Code.String())
 
 	if len(rsp.Data) != 0 {
 		// Do no print this line when using the commit command

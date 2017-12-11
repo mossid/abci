@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/tendermint/abci/example/code"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/tmlibs/common"
 )
@@ -29,23 +28,15 @@ func (app *CounterApplication) SetOption(req types.RequestSetOption) types.Respo
 	key, value := req.Key, req.Value
 	if key == "serial" && value == "on" {
 		app.serial = true
-	} else {
-		return types.ResponseSetOption{
-			Code: code.CodeTypeBadOption,
-			Log:  cmn.Fmt("Unknown key (%s) or value (%s)", key, value),
-		}
 	}
-
-	return types.ResponseSetOption{
-		Code: code.CodeTypeOK,
-	}
+	return types.ResponseSetOption{}
 }
 
 func (app *CounterApplication) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	if app.serial {
 		if len(tx) > 8 {
 			return types.ResponseDeliverTx{
-				Code: code.CodeTypeEncodingError,
+				Code: types.CodeType_EncodingError,
 				Log:  fmt.Sprintf("Max tx size is 8 bytes, got %d", len(tx))}
 		}
 		tx8 := make([]byte, 8)
@@ -53,19 +44,19 @@ func (app *CounterApplication) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		txValue := binary.BigEndian.Uint64(tx8)
 		if txValue != uint64(app.txCount) {
 			return types.ResponseDeliverTx{
-				Code: code.CodeTypeBadNonce,
+				Code: types.CodeType_BadNonce,
 				Log:  fmt.Sprintf("Invalid nonce. Expected %v, got %v", app.txCount, txValue)}
 		}
 	}
 	app.txCount++
-	return types.ResponseDeliverTx{Code: code.CodeTypeOK}
+	return types.ResponseDeliverTx{Code: types.CodeType_OK}
 }
 
 func (app *CounterApplication) CheckTx(tx []byte) types.ResponseCheckTx {
 	if app.serial {
 		if len(tx) > 8 {
 			return types.ResponseCheckTx{
-				Code: code.CodeTypeEncodingError,
+				Code: types.CodeType_EncodingError,
 				Log:  fmt.Sprintf("Max tx size is 8 bytes, got %d", len(tx))}
 		}
 		tx8 := make([]byte, 8)
@@ -73,21 +64,21 @@ func (app *CounterApplication) CheckTx(tx []byte) types.ResponseCheckTx {
 		txValue := binary.BigEndian.Uint64(tx8)
 		if txValue < uint64(app.txCount) {
 			return types.ResponseCheckTx{
-				Code: code.CodeTypeBadNonce,
+				Code: types.CodeType_BadNonce,
 				Log:  fmt.Sprintf("Invalid nonce. Expected >= %v, got %v", app.txCount, txValue)}
 		}
 	}
-	return types.ResponseCheckTx{Code: code.CodeTypeOK}
+	return types.ResponseCheckTx{Code: types.CodeType_OK}
 }
 
 func (app *CounterApplication) Commit() (resp types.ResponseCommit) {
 	app.hashCount++
 	if app.txCount == 0 {
-		return types.ResponseCommit{Code: code.CodeTypeOK}
+		return types.ResponseCommit{Code: types.CodeType_OK}
 	}
 	hash := make([]byte, 8)
 	binary.BigEndian.PutUint64(hash, uint64(app.txCount))
-	return types.ResponseCommit{Code: code.CodeTypeOK, Data: hash}
+	return types.ResponseCommit{Code: types.CodeType_OK, Data: hash}
 }
 
 func (app *CounterApplication) Query(reqQuery types.RequestQuery) types.ResponseQuery {

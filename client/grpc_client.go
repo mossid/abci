@@ -48,6 +48,7 @@ func (cli *grpcClient) OnStart() error {
 		return err
 	}
 RETRY_LOOP:
+
 	for {
 		conn, err := grpc.Dial(cli.addr, grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 		if err != nil {
@@ -59,7 +60,6 @@ RETRY_LOOP:
 			continue RETRY_LOOP
 		}
 
-		cli.Logger.Info("Dialed server. Waiting for echo.", "addr", cli.addr)
 		client := types.NewABCIApplicationClient(conn)
 
 	ENSURE_CONNECTED:
@@ -68,7 +68,6 @@ RETRY_LOOP:
 			if err == nil {
 				break ENSURE_CONNECTED
 			}
-			cli.Logger.Error("Echo failed", "err", err)
 			time.Sleep(time.Second * echoRetryIntervalSeconds)
 		}
 
@@ -82,8 +81,8 @@ func (cli *grpcClient) OnStop() {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	// TODO: how to close conn? its not a net.Conn and grpc doesn't expose a Close()
-	/*if cli.client.conn != nil {
-		cli.client.conn.Close()
+	/*if cli.conn != nil {
+		cli.conn.Close()
 	}*/
 }
 
@@ -105,7 +104,7 @@ func (cli *grpcClient) StopForError(err error) {
 func (cli *grpcClient) Error() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
-	return errors.Wrap(cli.err, "grpc client error")
+	return errors.Wrap(cli.err, types.HumanCode(types.CodeType_InternalError))
 }
 
 // Set listener for all responses

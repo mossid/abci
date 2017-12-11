@@ -1,24 +1,14 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 
-	"github.com/gogo/protobuf/jsonpb"
+	"github.com/tendermint/go-wire/data"
 )
-
-const (
-	CodeTypeOK uint32 = 0
-)
-
-// IsOK returns true if Code is OK.
-func (r ResponseCheckTx) IsOK() bool {
-	return r.Code == CodeTypeOK
-}
 
 // IsErr returns true if Code is something other than OK.
 func (r ResponseCheckTx) IsErr() bool {
-	return r.Code != CodeTypeOK
+	return r.Code != CodeType_OK
 }
 
 // Error implements error interface by formatting response as string.
@@ -26,14 +16,9 @@ func (r ResponseCheckTx) Error() string {
 	return fmtError(r.Code, r.Log)
 }
 
-// IsOK returns true if Code is OK.
-func (r ResponseDeliverTx) IsOK() bool {
-	return r.Code == CodeTypeOK
-}
-
 // IsErr returns true if Code is something other than OK.
 func (r ResponseDeliverTx) IsErr() bool {
-	return r.Code != CodeTypeOK
+	return r.Code != CodeType_OK
 }
 
 // Error implements error interface by formatting response as string.
@@ -41,14 +26,9 @@ func (r ResponseDeliverTx) Error() string {
 	return fmtError(r.Code, r.Log)
 }
 
-// IsOK returns true if Code is OK.
-func (r ResponseCommit) IsOK() bool {
-	return r.Code == CodeTypeOK
-}
-
 // IsErr returns true if Code is something other than OK.
 func (r ResponseCommit) IsErr() bool {
-	return r.Code != CodeTypeOK
+	return r.Code != CodeType_OK
 }
 
 // Error implements error interface by formatting response as string.
@@ -56,84 +36,46 @@ func (r ResponseCommit) Error() string {
 	return fmtError(r.Code, r.Log)
 }
 
-// IsOK returns true if Code is OK.
-func (r ResponseQuery) IsOK() bool {
-	return r.Code == CodeTypeOK
+func fmtError(code CodeType, log string) string {
+	codeAsStr, ok := code2string[code]
+	if ok {
+		return fmt.Sprintf("%s (%d): %s", codeAsStr, code, log)
+	} else {
+		return fmt.Sprintf("Unknown error (%d): %s", code, log)
+	}
+}
+
+// ResultQuery is a wrapper around ResponseQuery using data.Bytes instead of
+// raw byte slices.
+type ResultQuery struct {
+	Code   CodeType   `json:"code"`
+	Index  int64      `json:"index"`
+	Key    data.Bytes `json:"key"`
+	Value  data.Bytes `json:"value"`
+	Proof  data.Bytes `json:"proof"`
+	Height uint64     `json:"height"`
+	Log    string     `json:"log"`
+}
+
+// Result converts response query to ResultQuery.
+func (r *ResponseQuery) Result() *ResultQuery {
+	return &ResultQuery{
+		Code:   r.Code,
+		Index:  r.Index,
+		Key:    r.Key,
+		Value:  r.Value,
+		Proof:  r.Proof,
+		Height: r.Height,
+		Log:    r.Log,
+	}
 }
 
 // IsErr returns true if Code is something other than OK.
-func (r ResponseQuery) IsErr() bool {
-	return r.Code != CodeTypeOK
+func (r *ResultQuery) IsErr() bool {
+	return r.Code != CodeType_OK
 }
 
-// Error implements error interface by formatting response as string.
-func (r ResponseQuery) Error() string {
+// Error implements error interface by formatting result as string.
+func (r *ResultQuery) Error() string {
 	return fmtError(r.Code, r.Log)
-}
-
-func fmtError(code uint32, log string) string {
-	return fmt.Sprintf("Error code (%d): %s", code, log)
-}
-
-//---------------------------------------------------------------------------
-// override JSON marshalling so we dont emit defaults (ie. disable omitempty)
-// note we need Unmarshal functions too because protobuf had the bright idea
-// to marshal int64->string. cool. cool, cool, cool: https://developers.google.com/protocol-buffers/docs/proto3#json
-
-var (
-	jsonpbMarshaller = jsonpb.Marshaler{
-		EnumsAsInts:  true,
-		EmitDefaults: true,
-	}
-	jsonpbUnmarshaller = jsonpb.Unmarshaler{}
-)
-
-func (r *ResponseSetOption) MarshalJSON() ([]byte, error) {
-	s, err := jsonpbMarshaller.MarshalToString(r)
-	return []byte(s), err
-}
-
-func (r *ResponseSetOption) UnmarshalJSON(b []byte) error {
-	reader := bytes.NewBuffer(b)
-	return jsonpbUnmarshaller.Unmarshal(reader, r)
-}
-
-func (r *ResponseCheckTx) MarshalJSON() ([]byte, error) {
-	s, err := jsonpbMarshaller.MarshalToString(r)
-	return []byte(s), err
-}
-
-func (r *ResponseCheckTx) UnmarshalJSON(b []byte) error {
-	reader := bytes.NewBuffer(b)
-	return jsonpbUnmarshaller.Unmarshal(reader, r)
-}
-
-func (r *ResponseDeliverTx) MarshalJSON() ([]byte, error) {
-	s, err := jsonpbMarshaller.MarshalToString(r)
-	return []byte(s), err
-}
-
-func (r *ResponseDeliverTx) UnmarshalJSON(b []byte) error {
-	reader := bytes.NewBuffer(b)
-	return jsonpbUnmarshaller.Unmarshal(reader, r)
-}
-
-func (r *ResponseQuery) MarshalJSON() ([]byte, error) {
-	s, err := jsonpbMarshaller.MarshalToString(r)
-	return []byte(s), err
-}
-
-func (r *ResponseQuery) UnmarshalJSON(b []byte) error {
-	reader := bytes.NewBuffer(b)
-	return jsonpbUnmarshaller.Unmarshal(reader, r)
-}
-
-func (r *ResponseCommit) MarshalJSON() ([]byte, error) {
-	s, err := jsonpbMarshaller.MarshalToString(r)
-	return []byte(s), err
-}
-
-func (r *ResponseCommit) UnmarshalJSON(b []byte) error {
-	reader := bytes.NewBuffer(b)
-	return jsonpbUnmarshaller.Unmarshal(reader, r)
 }

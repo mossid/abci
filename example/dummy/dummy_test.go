@@ -7,15 +7,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
+	abcicli "github.com/tendermint/abci/client"
+	abciserver "github.com/tendermint/abci/server"
+	"github.com/tendermint/abci/types"
 	"github.com/tendermint/iavl"
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
-
-	abcicli "github.com/tendermint/abci/client"
-	"github.com/tendermint/abci/example/code"
-	abciserver "github.com/tendermint/abci/server"
-	"github.com/tendermint/abci/types"
 )
 
 func testDummy(t *testing.T, app types.Application, tx []byte, key, value string) {
@@ -30,7 +27,7 @@ func testDummy(t *testing.T, app types.Application, tx []byte, key, value string
 		Path: "/store",
 		Data: []byte(key),
 	})
-	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, types.CodeType_OK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 
 	// make sure proof is fine
@@ -39,7 +36,7 @@ func testDummy(t *testing.T, app types.Application, tx []byte, key, value string
 		Data:  []byte(key),
 		Prove: true,
 	})
-	require.EqualValues(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, types.CodeType_OK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 	proof, err := iavl.ReadKeyExistsProof(resQuery.Proof)
 	require.Nil(t, err)
@@ -82,7 +79,7 @@ func TestPersistentDummyInfo(t *testing.T) {
 	}
 	dummy := NewPersistentDummyApplication(dir)
 	InitDummy(dummy)
-	height := int64(0)
+	height := uint64(0)
 
 	resInfo := dummy.Info(types.RequestInfo{})
 	if resInfo.LastBlockHeight != height {
@@ -90,12 +87,12 @@ func TestPersistentDummyInfo(t *testing.T) {
 	}
 
 	// make and apply block
-	height = int64(1)
+	height = uint64(1)
 	hash := []byte("foo")
 	header := &types.Header{
-		Height: int64(height),
+		Height: uint64(height),
 	}
-	dummy.BeginBlock(types.RequestBeginBlock{hash, header, nil, nil})
+	dummy.BeginBlock(types.RequestBeginBlock{hash, header})
 	dummy.EndBlock(types.RequestEndBlock{header.Height})
 	dummy.Commit()
 
@@ -173,13 +170,13 @@ func TestValSetChanges(t *testing.T) {
 
 func makeApplyBlock(t *testing.T, dummy types.Application, heightInt int, diff []*types.Validator, txs ...[]byte) {
 	// make and apply block
-	height := int64(heightInt)
+	height := uint64(heightInt)
 	hash := []byte("foo")
 	header := &types.Header{
 		Height: height,
 	}
 
-	dummy.BeginBlock(types.RequestBeginBlock{hash, header, nil, nil})
+	dummy.BeginBlock(types.RequestBeginBlock{hash, header})
 	for _, tx := range txs {
 		if r := dummy.DeliverTx(tx); r.IsErr() {
 			t.Fatal(r)
@@ -215,14 +212,14 @@ func makeSocketClientServer(app types.Application, name string) (abcicli.Client,
 
 	server := abciserver.NewSocketServer(socket, app)
 	server.SetLogger(logger.With("module", "abci-server"))
-	if err := server.Start(); err != nil {
+	if _, err := server.Start(); err != nil {
 		return nil, nil, err
 	}
 
 	// Connect to the socket
 	client := abcicli.NewSocketClient(socket, false)
 	client.SetLogger(logger.With("module", "abci-client"))
-	if err := client.Start(); err != nil {
+	if _, err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err
 	}
@@ -238,13 +235,13 @@ func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, c
 	gapp := types.NewGRPCApplication(app)
 	server := abciserver.NewGRPCServer(socket, gapp)
 	server.SetLogger(logger.With("module", "abci-server"))
-	if err := server.Start(); err != nil {
+	if _, err := server.Start(); err != nil {
 		return nil, nil, err
 	}
 
 	client := abcicli.NewGRPCClient(socket, true)
 	client.SetLogger(logger.With("module", "abci-client"))
-	if err := client.Start(); err != nil {
+	if _, err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err
 	}
@@ -298,7 +295,7 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 		Data: []byte(key),
 	})
 	require.Nil(t, err)
-	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, types.CodeType_OK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 
 	// make sure proof is fine
@@ -308,7 +305,7 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 		Prove: true,
 	})
 	require.Nil(t, err)
-	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, types.CodeType_OK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 	proof, err := iavl.ReadKeyExistsProof(resQuery.Proof)
 	require.Nil(t, err)
